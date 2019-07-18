@@ -1,0 +1,1 @@
+Needed to show a bit of type erasure.
