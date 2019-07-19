@@ -1,4 +1,5 @@
 #include <chrono>
+#include <iostream>
 #include <memory>
 
 struct coordinates {
@@ -183,9 +184,12 @@ class Vehicle {
     *this = std::move(tmp);
     return *this;
   }
+
+  // I'm never too sure about self move assignment.
+  // Can probably be better.
   Vehicle& operator=(Vehicle&& x) {
-    body_ = std::exchange(x.body_, nullptr);
-    vptr_ = x.vptr_;
+    std::swap(body_, x.body_);
+    std::swap(vptr_, x.vptr_);
     return *this;
   }
 
@@ -277,8 +281,40 @@ TEST_CASE("motorbike") {
 
 }  // namespace v2
 
-struct Boat {
+struct LeakDetector {
+  static struct Counter {
+    int body = 0;
+
+    ~Counter() {
+      if (body != 0) {
+        std::cout << "FAILED LEAKS" << std::endl;
+      };
+    }
+  } global;
+
+  void increase() const { ++global.body; }
+  void decrease() const { --global.body; }
+
+  LeakDetector() { increase(); }
+
+  LeakDetector(const LeakDetector&) { increase(); }
+
+  LeakDetector(LeakDetector&&) { increase(); }
+
+  LeakDetector& operator=(const LeakDetector&) = default;
+  LeakDetector& operator=(LeakDetector&&) = default;
+
+  ~LeakDetector() { decrease(); }
+};
+
+LeakDetector::Counter LeakDetector::global;
+
+struct Boat : LeakDetector {
   void move(const coordinates& c) { pos = c.x; }
+
+  Boat() = default;
+
+  explicit Boat(int x) : pos(x) {}
 
   friend bool operator==(const Boat& x, const Boat& y) {
     return x.pos == y.pos;
@@ -332,6 +368,11 @@ void generic_test(){{VehicleT v;
   VehicleT v1{Boat{}};
   VehicleT v2;
   v2 = std::move(v1);
+}
+{
+  VehicleT v1{Boat{15}};
+  VehicleT v2{Boat{18}};
+  v1 = std::move(v2);
 }
 }
 ;
